@@ -1,0 +1,36 @@
+8,1,First the server gives the link to proxy/internal_website/public_notes and proxy/internal_website/public_links in the landing page,I,
+8,2,"I try to use different API endpoint like proxy/internal_website/aaaa, and the server returns all the availble API for me:","A,I",1
+8,3,Let's check out source_code of the server:,A,
+8,4,The server basically behaves like a reverse proxy,I,3
+8,5,"Excluding /proxy/interal_website, all the other APIs require the connection from localhost",I,3
+8,6,The main objective is visiting /flag/:token via /proxy/internal_website/:page but we have to find an approach to bypass the following constraints:,I,3
+8,7,:page doesn't contain flag,I,3
+8,8,":page starts with public_notes, public_links or source_code",I,3
+8,9,cannot contain / (because express params is split by /),I,3
+8,10,"Okay, so let's take a look at how many parser are parsing our request:",A,3
+8,11,"Actually 1 is not necessary, but just a friendly reminder: your browser might parse your url first, e.g.: /asd/../ggg becomes /ggg.",I,10
+8,12,The most possible parsers to exploit are 2 and 3,I,10
+8,13,Note that the server even gives the version information,I,10
+8,14,"After a few fuzzing, I found in 2 you can pass some non-pritable chracter through percent-encoding","A,I",10
+8,15,In 3 you can use backslash to represent /.,I,10
+8,16,However it's still not enough to bypass the constraint 2.,I,10
+8,17,Then I start to google some interesting information of path parsing,A,10
+8,18,"I remember in blackhat 2017, there is an great SSRF slide by Orange Tsai from Taiwan",I,17
+8,19,Please refer to page 44.,I,17
+8,20,Actually we can do some CSRF injection here using \uff0d\uff0a,"A,I",17
+8,21,Another interesting ariticle of CSRF injection I found is request splitting by Ryan Kelly,I,20
+8,22,We can inject two CRLFs to make the nodejs socket send another request!,I,20
+8,23,The rest is trivial,,
+8,24,Just send the request to /flag/:token,A,20
+8,25,Here is the final payload:,,
+8,26,"You can also use double-encoding %2561 to represent a, or backslash to represent / in order to bypass the constrinat.",I,24
+8,27,Failed attempts,,
+8,28,Using ../ to bypass the constaint 2 in node http module,A,
+8,29,Actually node v11.0.0 supports this feature,I,28
+8,30,"We can pass the /aaaaa/../flag to the parameter, the node http will resolve to /flag and send the request to /flag",A,
+8,31,However this doesn't work in node v8.12.0.,I,30
+8,32,Using ../ or percent encoding to bypass the constaint2 in express router,A,
+8,33,However express seems to parse the API very strictly.....,I,32
+8,34,I can't even make the express parsing incorrectly,A,
+8,35,Write a fuzzing script to find characters which make the parser parsing incorrectly:,A,
+8,36,"Nothing interesting in node v8.12, but this script help me to find this interesting payload in node v11.0.0",A,

@@ -1,0 +1,137 @@
+
+CSAW CTF Qualification- wtf.sql
+Sep 18, 2018 — zap
+WTF.SQL
+
+It is a period of civil war.
+Rebel hackers, striking
+from a hidden base, have won
+their first victory against
+the evil DBA.
+
+During the battle, Rebel
+spies managed to steal secret
+plans to the DBA's
+ultimate weapon, WTF.SQL,
+an integrated framework
+with enough buzzwords to
+host an entire website.
+
+Pursued by the DBA's
+sinister agents, You, the
+Player, race home aboard
+your VT100, custodian of the
+stolen schema that can save
+the animals and restore
+freedom to the internet.....
+
+Your mission is to read out
+the txt table in the flag
+database.
+
+This challange was from the CSAW Qualification round this year. It consisted of a forum-like application on a webserver written almost entirely in SQL. It was solved by zap, negasora and Hawkheart
+Reconnaissance
+
+Opening the challenge greets us with the following (retro) page:
+
+Homepage of wtf.sql
+
+If we look closely, there seems to be a reference to robots.txt. Lets take a look:
+
+
+# Yeah, we know this is contrived :(
+
+Nice! We now have some endpoints to look at. After exploring a bit, the /verify endpoint looks like it could be interesting.
+
+Browsing to /verify in a webbrowser, leads us to this page: /verify- missing proc
+
+Proc is an interesting name for a parameter- lets supply some names we found from robots.txt; in fact, why not admin_handler?
+
+
+It should be obvious, but we now have access to the server source code. Awesome!
+Cookie Authentication
+
+Exploring the source code leads to a few functions of interest, relating to the implementation of authentication on wtf.sql:
+
+verify_cookie:
+
+login:
+
+After analysing these files, it becomes clear what is going on- On login, 3 cookie values are assigned: privs, admin, and email. Each value is signed with a SHA256 hash of its own value, concatenated with a secret hash, followed by the hex-encoded value of the cookie.
+
+Visualizing the format for clarity:
+
+Admin cookie:
+   
+signature is a 256 hash of:
+thisisasecrethash0
+where 'thisisasecrethash' is unknown to us.
+
+So to pass the signature checks, we need to be able to sign our values. This leads to an interesting condition- if we can leak the secret, or, if we can get the server to sign a value for us, we’ve got admin!
+
+Lets create an account with the email set as the number ‘1’ and plug it into our admin cookie, then try visiting the admin page:
+
+Replacing admin cookie for signature
+
+Success! We were able to get the server to sign the character ‘1’, and inserting the signature into the admin cookie gives us a pass! However, there was another way- which we be discussed later on in this post.
+Cookie Privileges
+
+We got admin, but we see nothing! Looking at the admin handler code, it looks for signed privileges too. We’re not done yet!
+
+Following the has_priv function from the admin_handler, we find that the privileges are signed as follows:
+
+has_priv:
+
+It looks like the privilege cookie is being signed again, with a different secret value, using MD5 this time. A trained eye will realize something though- we have a hash of the secret value by itself, concatenated with our privileges (currently empty). Let’s represent this visually again:
+
+Then, hex decode all of the following characters:
+'60f0cc64f5b633cf502d25ea561a98bf' <-- This is our hashed secret, and since we have no privileges, nothing follows right now.
+
+'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX;panel_create;panel_view;' <-- if we had permissions, this is what the hex decode would reveal- where the X's are the secret with ';panel_create;panel_view;' concatenated.
+
+This looks like a classic hash length extension attack. This setup allows us to append any data to the end of of a hashed value. This alters the original hash, but keeps the prefix to our data intact- allowing us to bypass the hash check.
+
+For a hash length extension, we need to know how long the secret is- or, we can bruteforce that check. A bunch of programs can be used to calculate hash extensions, meaning we don’t have to write it ourselves. The one used in my solution script is using HashPump.
+
+The script reads piped output from HashPump into a python array, and tries all secret lengths from 1 to 32. Now all that’s left is to sign our raw extended hash value with the secret value for the cookies, and we’ve bypassed it! Let’s give it a shot by using our admin cookie trick!
+
+The webserver didn't like that
+Finally leaking the secret value
+
+Here is where we got stuck. Extending an MD5 hash requires the hex value 0x80, which is invalid ascii. The webserver would just crash when it tried to process our request. Hypothetically, our attack works- we just need a valid cookie signature, so we can sign arbitrary bytes instead of just printable ones.
+
+Thus, we returned to the code. At this point, we’ve spent many hours on this challenge trying to get the webserver to accept our input through unicode trickery, and we were largely unsuccessful.
+
+Returning to the website, we began looking for signs of XSS- after all, there is a template engine, and one written in SQL. We might be able to leak some data. Let’s look at another SQL function:
+
+template_string:
+
+oh my goodness. It was right there the whole time. Looking at the regex, and the template vars, the secret value gets loaded into the template engine. Lets try to inject into the name field!
+
+an_bad_secret_value_nhcq497y8
+
+Now that we have the secret value for the SHA signature, we can sign our cookie locally! We won’t have to worry about crashing our web request with invalid unicode bytes anymore.
+Putting it all together
+
+It worked!
+
+We finally have a plan of attack. Make a request to /admin with our cookies set properly. We aren’t sure what the length of the privilege variable is, so we write a script to look for changes in the admin page when we try different lengths, and plug that cookie into our web browser after the fact.
+
+To encode the priv cookie, we have to do a couple things: 1. Take the raw bytes of our extended hash, add the secret value on to the end. 2. SHA 256 the result. 3. Hex encode the raw bytes, and append them to the SHA hash.
+
+The extra data and hash values are read from the piped output of HashPump, all we need to do is put everything together in the right order.
+
+To generate the right file from hashpump:
+
+Solution script:
+
+
+We can finally get to the admin panel! Setting the proper cookies in the browser brings us here:
+
+flag!
+
+During the competition the flag was already up, and afterwards the database query we were supposed to use doesn’t seem to be functioning anymore. However, looking at the dump html table function all that needed to be done was to type ‘flag.txt’ and add the panel:
+
+dump_table_html:
+
+Flag captured!

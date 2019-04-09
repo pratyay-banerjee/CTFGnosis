@@ -1,0 +1,35 @@
+NodeJS SSRF by Design Flaw — ASIS Final 2018 — SSLVPN Challenge Walkthrough
+Go to the profile of Yasho
+Yasho
+Nov 26, 2018
+
+The participants were given a URL, opening the URL led to a login page. The main idea of the challenge was exploiting an SSRF vulnerability caused by the design flaw.
+
+Conducting a login request resulted in the following response:
+
+As it’s been seen, the X-Database-Request-Check revealed a file, trying to download the database:
+
+
+Considering the error and the fact which the application is deployed by NodeJS, something like that might be there:
+
+Consequently:
+
+Three users revealed, only david’s password was indexed in google: p@ss. Logged-in successfully, there were two menus, the one was working named echo service . 
+
+The variables are bolded in the request. Fuzzing on theserver resulted in that it couldn't change, the only acceptable value was echo2.server. The echo service was serving in http://162.243.23.15:8001. We did some fuzzing stuff on the following request.
+
+The result:
+
+    The numbers like 123.
+
+Wait a minute, the host has been changed! As a consequence, the server-side logic was something like the picture below
+
+Considering the following HTML hint:
+
+<!--p Warning: some menues may be filtered (not shown) due to your IP address.-->
+
+Besides the fact that I could control the host.
+
+So the appropriate payload was @127.0.0.1:8000.
+
+

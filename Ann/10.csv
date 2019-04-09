@@ -1,0 +1,23 @@
+10,1,Rating: 0,,
+10,2,"(bookgin, kaibro, qazwsxedcrfvtg14, hortune, written by bookgin)",,
+10,3,We should get shell in order to retrieve the flag in Oh My raddit 2.,I,
+10,4,"Since we have the DES key now, we can first decrypt the ciphertext of the download command:","A,I",
+10,5,Let's try specifying the path now,"A,I",4
+10,6,"Does it work? Yes, it works!",,
+10,7,Read the following files:,"A,I",5
+10,8,Here is the source code of app.py:,,
+10,9,"First I found this issue, and it's reported by Orange Tsai, who is the author of the challenge",A,
+10,10,"This issue is fixed in webpy 0.39, but the server side still use 0.38! Thus it's vulnerable to SQLite injection through limit parameter.",I,9
+10,11,@kaibro found another issue,,
+10,12,They try to fix eval code execution by passing a empty builtin to it.,I,9
+10,13,"When eval takes the second parameter with builtin in it, the current builtin will be replaced",I,9
+10,14,In the source code the builtins is set to an empty object,I,9
+10,15,"In other words, passing builtin is similarly to replace the current namespace.",I,9
+10,16,"However, replacing the namespace doesn't prevent us to retrieve other exploitable classes",I,9
+10,17,"We just cannot directly use eval, __import__ ....",I,9
+10,18,"First, list all the classes through",A,
+10,19,Take a closer look,,
+10,20,"There is <class 'subprocess.Popen'> class, so it's trivial to RCE now!","A,I",10
+10,21,It's worth to mention @qazwsxedcrfvtg14 's more creative payload,,
+10,22,I can't believe that an unbounded method can access __globals__ in Python 2.7 !,I,20
+10,23,The flag is hitcon{Fr0m_SQL_Injecti0n_t0_Shell_1s_C00L!!!}.,,

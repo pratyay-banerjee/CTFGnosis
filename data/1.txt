@@ -1,0 +1,63 @@
+CTF Writeup: Complex Drupal POP Chain
+29 Jan 2019 by Simon Scannell
+A recent Capture-The-Flag tournament hosted by Insomni’hack challenged participants to craft an attack payload for Drupal 7. This blog post will demonstrate our solution for a PHP Object Injection with a complex POP gadget chain.
+
+About the Challenge
+
+The Droops challenge consisted of a website which had a modified version of Drupal 7.63 installed. The creators of the challenge added a Cookie to the Drupal installation that contained a PHP serialized string, which would then be unserialized on the remote server, leading to a PHP Object Injection vulnerability. Finding the cookie was straightforward and the challenge was obvious: Finding and crafting a POP chain for Drupal.
+
+If you are not familiar with PHP Object Injections we recommend reading our blog post about the basics of PHP Object Injections.
+Drupal POP Chain to Drupalgeddon 2
+
+We found the following POP chain in the Drupal source code that affects its cache mechanism. Through the POP chain it was possible to inject into the Drupal cache and abuse the same feature that lead to the Drupalgeddon 2 vulnerability. No knowledge of this vulnerability is required to read this blog post, as each relevant step will be explained.
+
+The POP chain is a second-order Remote Code Execution, which means that it consists of two steps:
+
+ 1.  Injecting into the database cache the rendering engine uses
+ 2.  Exploiting the rendering engine and Drupalgeddon 2
+
+Injecting into the cache
+
+The DrupalCacheArray class in includes/bootstrap.inc implements a destructor and writes some data to the database cache with the method set(). This is our entry point of our gadget chain.
+
+The set() method will essentially call Drupal’s cache_set() function with $this->cid, $data, and $this->bin, which are all under control of the attacker since they are properties of the injected object. We assumed that we are now able to inject arbitrary data into the Drupal cache.
+
+In order to find out if this assumption was true, we started digging into the internals of the Drupal cache. We found out that the cache entries are stored in the database. Each cache type has its own table. (A cache for forms, one for pages and so on.)
+
+After a bit more of digging around, we discovered that the table name is the equivalent to $this->bin. This means we can set bin to be of any cache type and inject into any cache table. But what can we do with this?
+
+The next step was to analyze the different cache tables for interesting entries and their structure.
+
+For example the cache_form table has a column called cid. As a reminder, one of the arguments to cache_set() was $this->cid. We assumed the following: $this->cid maps to the cid column of the cache table, which is set in $this->bin. cid is the key of a cache entry and the data column simply is the $data parameter in cache_set().
+
+To verify all these assumptions we created a serialized payload locally by creating a class in a build.php file and unserialized it on my test Drupal setup:
+
+The reason we used the SchemaCache class here is because it extends the abstract class DrupalCacheArray, which means it can’t be instantiated on its own. The deserialization of this data lead to the following entry in the cache_form table being created:
+
+
+Using the injected cached data to gain Remote Code Execution
+
+Since we were now able to inject arbitrary data into any caching table, we started to search for ways in which the cache was used by Drupal that could be used to gain Remote Code Execution. After a bit of searching, we stumbled upon the following ajax callback, which can be triggered by making a request to the URL: http://drupalurl.org/?q=system/ajax.
+
+The ajax_get_form() function internally uses cache_get() to retrieve a cached entry from the cache_form table:
+
+This is interesting because this means it is possible to pass an arbitrary form render array to drupal_process_form(). As previously mentioned, the Drupalgeddon 2 vulnerability abused this feature, so chances were high that code execution could be achieved with the ability to inject arbitrary render arrays into the rendering engine.
+
+Within drupal_process_form(), we found the following lines of code:
+
+Here, $element refers to the $form received via cache_get(), meaning the keys and values of the array can be set arbitrarily. This means it is possible to simply set an arbitrary process (#process) callback and execute it with the render array as a parameter. Since the first argument is an array, it is not possible to simply call a function such as system() directly. What is required is a function that takes an array as input that leads to RCE.
+
+The drupal_process_attached() function seemed very promising:
+
+Since all array keys and values can be set arbitrarily, is is possible to call an arbitrary function with arbitrary arguments via call_user_func_array(), which leads to RCE!
+
+This means the final POP chain looks like this:
+
+All that is left to do is to trigger the PHP Object Injection vulnerability with the resulting serialized string and then to make a POST request to http://drupalurl.org/?q=system/ajax and set the POST parameter form_build_id to 1337 to trigger the RCE.
+
+Conclusion
+
+POP chains can often become more complex and require a deeper knowledge of the application. However, the purpose of this blog post was to demonstrate that exploitation is still possible, even if no obvious, first order POP chain exists. If we had not known that the rendering API of drupal uses a lot of callbacks and had vulnerabilities in the past, we probably would not have found this particular POP chain. Alternatively, deep PHP knowledge can also lead to working POP chains when no obvious POP chain can be found. There exists another POP chain, an Object Instantion to Blind XXE to File Read to SQL Injection to RCE. A write up for this POP chain was written by Paul Axe and can be found here. We also would like to thank the creators for creating this and the other amazing challenges for the Insomni’hack CTF 2019.
+
+
+

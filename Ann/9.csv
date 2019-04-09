@@ -1,0 +1,24 @@
+9,1,Rating: 2.3,,
+9,2,The text on the page says this:,A,
+9,3,"Flag is hitcon{ENCRYPTION_KEY}, and here is a hint for you :P",I,2
+9,4,"If you fail in submitting the flag and want to argue with author, read the source first!",I,2
+9,5,"That note in itself is a huge hint, but it also links to a file named hint.py with these contents:",I,2
+9,6,assert ENCRYPTION_KEY.islower(),,
+9,7,"If you look around the page, you'll notice the links are all in a kinda weird format","A,I",
+9,8,"<a href=""?s=59154ed9ef5129d081160c5f9882f57dcfd76f05f6ac8f1a38114a30fb1839a27fea88c412d9e1149dedcb1c01c0a6662a36d91fd8751e52ba939a65efbe150f9504247abb9fe6be24d3d4dcfda82306"">An Innovative Phishing Style</a>",,
+9,9,"The bytes of the s query parameter don't have any obvious pattern, and based on the text at the top of the page, we're most likely looking at ciphertext.",I,7
+9,10,"If you look for patterns in the ciphertext, you'll find that all of the URLs have lengths divisible by 8-bytes, that the lengths correlate to the lengths of the link texts, and that many links tend to have 8-byte blocks in common:",I,7
+9,11,"Based on all of these hints, we can infer that a 64-bit block cipher is used to encode data into each link, and we can deduce some plaintext for some of the blocks:",I,7
+9,12,V u l n e r a  b i l i t i e s,,
+9,13,I  n j e c t i o n,,
+9,14,"If we guess that the algorithm used is DES, we can try brute-forcing the encryption key for the the 42aa7c80bae5f78f block, whose plaintext is ""njection""","A,I",
+9,15,"The hints we've been given imply that the key is a lowercase string, so even if we're wrong about the algorithm being DES, the possible keyspace is very small and exhaused quickly, so we may as well try:","A,I",14
+9,16,"And we get a result pretty quickly: ""ldgonaro""",,
+9,17,"Note: You could brute-force any block, but it's a good idea to avoid blocks with symbols as we don't know how they might be encoded at this point.",I,14
+9,18,You can now use this key to decrypt URLs and see the full contents,A,14
+9,19,"But if you try to submit hitcon{ldgonaro}, you won't get any points despite submitting a working encryption key",I,18
+9,20,The least-significant bit in each byte of a DES key is ignored during encryption/decryption,I,18
+9,21,So there are actually 256 equivalent keys,I,18
+9,22,"If you exclude the keys that aren't made up of letters only, there are 128 possible solutions","A,I",18
+9,23,"That's a small enough set that you can just submit them all until you get it right, and for this challenge, the accepted flag was hitcon{megnnaro}","A,I",22
+9,24,"(You may be able to find the flag without guessing by crafting download links, but that's not necessary for part one of this challenge.)",I,

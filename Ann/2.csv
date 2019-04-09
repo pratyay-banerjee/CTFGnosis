@@ -1,0 +1,19 @@
+2,1,Solves: 7 / Points: 500 / Category: Web,,
+2,2,We have created a little exploit space and made it accessible for everyone! Have fun! You can get your own exploit space here.,,
+2,3,"This challenge was the most realistic yet fun web challenge of this Insomni’Hack teaser, as it presented nothing less than an installation of the ResourceSpace open source digital asset management software.",I,
+2,4,"The first step, like for any challenge, was the reconnaissance phase.",A,
+2,5,"As indicated in the commented HTML code, the installed version of the ResourceSpace was the version 8.6.12117:",I,
+2,6,"This software being open source, we can audit its source code in order to find vulnerabilities we can exploit.",A/I,6
+2,7,We can then look at the Git commits logs to find juicy commit messages like this one:,A/I,7
+2,8,"Looking at the diff view for this commit, reveals the vulnerable entry point in the “/plugins/pdf_split/pages/pdf_split.php” page being passed to the run_command() function:",A/I,"7,8"
+2,9,The fix introduced by this commit just sanitizes the user inputs by applying the escapeshellarg() function:,I,7
+2,10,"Using the semi-colon character thus completes the comnand line, allowing us to execute arbitrary commands on the web server",A,9
+2,11,"However, as we don’t have a direct visible output, we need to use an HTTP server such as the Burp collaborator listening for incomming requests.",A/I,11
+2,12,The following POST request uses the curl binary in order to send the result of the whoami command to our web server:,A,11
+2,13,"Immediately after, we see the result of our command in our Burp collaborator interactions panel:",A,11
+2,14,The final step is to locate and get the flag:,A,
+2,15,Wait… What? There’s a captcha that prevents non-interactive access:,I,
+2,16,We actually need to obtain an interactive reverse shell on this server.,A,15
+2,17,"To do so we can download the netcat binary from our web server using curl, add execution permission and run it:",A,16
+2,18,"As expected, the web server just connects back to our server, therefore providing us with an interactive reverse shell:",A/I,16
+2,19,And finally we can solve the captcha and get the flag:,A,15

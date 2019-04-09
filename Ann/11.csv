@@ -1,0 +1,26 @@
+11,1,[Hack.lu CTF 2018] Baby PHP Write-up (Web153),,
+11,2,PHP is a popular general-purpose scripting language that is especially suited to web development.,,
+11,3,Can you untangle this mess?!,,
+11,4,"When we visit the website, we get the source code the index file.",I,
+11,5,In order to bypass the first check we can either use php://input and send the data via POST or,I,
+11,6,"In order to bypass the second check, we just need to send 1337 as key1",I,
+11,7,"Since it will be read as a string, the comparasion $k1 === $cc will fail while intval($k1) returns 1337 and passes the check.",I,
+11,8,"The length of key2 must be 42 and it must start with digits but must end with ＄ which is a utf-8 encoded dollar sign, thus it does not match the empty string at the end of the line",I,
+11,9,"Also, that utf-8 encoded dollar sign is consist of 3 bytes",I,
+11,10,"Therefore, strlen will return its length as 3 instead of 1.",I,
+11,11,Here is the value we will use for key2:,I,
+11,12,"Now, we can set $cc using GET query as well.",A,
+11,13,"We can set $cc as an array such that both substr($cc, $bb) and sha1($cc) function calls return null",I,12
+11,14,This will let us to overwrite local variables using GET query.,I,12
+11,15,"Now, if you investigate the next line carefully, you will notice that after the $ symbol it jumps to the end of the line and goes to the left instead of write",I,12
+11,16,"So, the text is written such that is from right to left after excluding the first $ symbol",A,
+11,17,The line simply equals to the following:,,
+11,18,"Now, in order to pass the next check, the condition $$a === $k1 must be satisfied which is simply equal to “2” === $k1 if we use the values of $a and $b from the previous line.",I,
+11,19,We know that we are now allowed to set local variables using GET query and we will use it to set $k1 to 2.,"A,I",18
+11,20,"Finally, there is an assert call which takes a string as argument",I,
+11,21,We know that assert evaluates the string which is given as argument,I,20
+11,22,"Thus, we can inject some code to make it print us the $flag.",A,21
+11,23,We can set $bb to:,A,
+11,24,This makes the assert line as the following:,,
+11,25,Let’s send our payload to the web server and read our flag.,A,
+11,26,Here is flag{7c217708c5293a3264bb136ef1fadd6e}.,,

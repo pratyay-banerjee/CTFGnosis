@@ -1,0 +1,17 @@
+7,1,Go to the profile of Yasho,,
+7,2,"The participants were given a URL, opening the URL led to a login page",I,
+7,3,The main idea of the challenge was exploiting an SSRF vulnerability caused by the design flaw.,I,
+7,4,Conducting a login request resulted in the following response:,A/I,4
+7,5,"As it’s been seen, the X-Database-Request-Check revealed a file, trying to download the database:",I,
+7,6,"Considering the error and the fact which the application is deployed by NodeJS, something like that might be there:",A/I,6
+7,7,"Three users revealed, only david’s password was indexed in google: p@ss",I,
+7,8,"Logged-in successfully, there were two menus, the one was working named echo service .",I,
+7,9,The variables are bolded in the request,I,
+7,10,"Fuzzing on theserver resulted in that it couldn't change, the only acceptable value was echo2.server",A/I,10
+7,11,The echo service was serving in http://162.243.23.15:8001,I,8
+7,12,We did some fuzzing stuff on the following request.,A,
+7,13,"Wait a minute, the host has been changed! As a consequence, the server-side logic was something like the picture below",A/I,13
+7,14,Considering the following HTML hint:,A,
+7,15,<!--p Warning: some menues may be filtered (not shown) due to your IP address.-->,I,
+7,16,Besides the fact that I could control the host.,A,
+7,17,So the appropriate payload was @127.0.0.1:8000.,I,16

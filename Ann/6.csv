@@ -1,0 +1,34 @@
+6,1,We are given a nodejs API which we can read/write the notes,A/I,
+6,2,"Follow the instruction on the landing page and visit /help, and we can see a hidden file fetcher API:",A,
+6,3,"Okay, let's try to guess the filename of the server",A,
+6,4,"Visiting /fetchJSAPI/fetch/server.js, it turns out the server is named server.js",A/I,"3,4"
+6,5,Note that the param must end in .js,I,
+6,6,Otherwise the server will not return the file content.,I,
+6,7,The main script includes other routers in ./api/routes/routes,I,
+6,8,"However, most of the note API is not interesting because the read-only in config.json is set to true",I,
+6,9,We cannot create/delete a new note,A,8
+6,10,Here is the note router source code:,,
+6,11,"In other APIs, the most suspicious one is status:",I,
+6,12,"It will execute those innocuous shell commands when visiting this API, but how to manipulate the hard-coded commands? The first thought comes to my mind is javascript prototype polution",A/I,12
+6,13,If we can modify the prototype we can inject arbitrary command!,A,12
+6,14,The only thing we can control is through the note API,I,
+6,15,It use lodash to merge the note with empty one,I,
+6,16,Then I search the lodash vulnerability and find this interesting,A,15
+6,17,It's just what we needed - Prototype Pollution.,I,
+6,18,So the rest is trivial,I,
+6,19,Pollute the command object and get RCE of the server,A,
+6,20,"Although I can use percent-encoding %2f to send /, I can't bypass the file extension check.",A/I,20
+6,21,Actually I don't have other failled attempts,,
+6,22,"If you cannot come out of Prototype pollution, don't be disappointed",,
+6,23,At least you learn something new :),,
+6,24,"Unsolved, for the compelte writeup please refer to @YShahinzadeh's writeup",,
+6,25,"Basically this is a SSRF challenge, using @ to make the google.com part being interperted as HTTP Basic access authentication.",I,
+6,26,I get the db.json through visiting http://162.243.23.15:8000/db.json/,A,
+6,27,Just append a slash.,A,
+6,28,"It's silly I didn't solve this one, because I forget to try the empty string in the path parameter.....",A/I,28
+6,29,so I assume it must be /.,A,
+6,30,Failed Attempts,A,
+6,31,"But the http module works well with ../, so I think it's not the vulnerable version.",A/I,"30,31"
+6,32,The echo API even doesn't return anything if we access it directly.,A/I,"30,32"
+6,33,Add the header X-SSLVPN-Request-Id: 9B60:6E97:25ADB08:45E4D17:5AE34BA4 in the requests,A,30
+6,34,It's totally useless.,I,"30,33"

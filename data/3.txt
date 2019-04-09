@@ -1,0 +1,107 @@
+Insomnihack Teaser 2019 / l33t-hoster
+January 20, 2019
+Description
+You can host your l33t pictures here.
+The Challenge
+Another great challenge by Insomnihack!
+This challenge consisted of a file upload service, allowing a user to upload images in a folder created specifically for your session.
+
+By checking the source code, we can find the HTML comment <!-- /?source -->, suggesting that we can leak the source code with the GET parameter source.
+Here is the challenge code :
+
+Determining the goal of the challenge
+
+The script above allows users to upload files at the location images/[20_random_bytes_in_hex]/[filename].
+
+After a succesful upload, the location of the upload is displayed, allowing the user to visit his file.
+
+We can’t upload any kind of file though. In fact, there are a few constraints we have to respect :
+
+    The uploaded file cannot have a PHP extension (.php, .php3, .phar, …).
+    The uploaded file cannot contain <?.
+    The uploaded file has to be a valid image of size 1337x1337.
+
+Assuming that we want to obtain RCE, we need to figure out a way to have PHP code execution without using a PHP extension.
+
+Uploading a .htaccess file could help us with that, but with the image restrictions, we need to find a way to create a valid .htaccess/image polyglot.
+
+Finding a .htaccess/image polyglot candidate
+
+The concept behind an .htaccess/image polyglot is that we need an image file that can be interpreted as an .htaccess file without any errors.
+
+Every image file format starts with a few magic bytes used to identify itself. For example, PNGs will start with the 4 bytes \x89PNG. Since \x89PNG isn’t a valid .htacces directive, we won’t be able to use the PNG file format for our polyglot.
+
+Therefore, my first attempt was to find a file format with a signature starting with a # sign. Since the # sign is interpreted as a comment in .htaccess files, the remainder of the image data would be ignored, resulting in a valid .htaccess/image polyglot.
+
+Unfortunately, I couldn’t find an image file format starting with a #.
+
+Later on, one of my teammates (@Tuan_Linh_98) noticed that lines starting with a null byte (\x00) are also ignored in an .htaccess file, just like comments (#).
+
+Looking through the supported image types for exif_imagetype(), we can download a sample of each type and check for a signature starting with a null byte.
+
+A good candidate we found was .wbmp files :
+
+Creating the .htaccess/image polyglot
+
+In order to make things simpler, we want to find the smallest possible .wbmp file we can work with. To do so, I used the following PHP script :
+
+… resulting in the following output :
+
+Seems like a valid .wbmp file only requires 6 bytes! We can assume that the width and height are stored in bytes 3-6.
+
+In a hex editor, you can play around with these bytes to figure out how to get a size of 1337x1337. The final image.wbmp of size 1337x1337 looks like this :
+
+From this file, we can append any data we want, and it’ll be considered as valid :
+
+Obtaining PHP code execution
+
+Now that we can upload an .htaccess file, we need to figure out how to get code execution. Because of the filter on <?, we can’t simply upload a PHP script and have it executed.
+
+One of the directives we can use in an .htaccess file is php_value. This directive allows us to overwrite the value of any of the settings here with the PHP_INI_PERDIR flag.
+
+Among these settings, there is auto_append_file, which allows us to specify a file to be appended and included when requesting a PHP file. Turns out that auto_append_file also allows various wrappers such as php://.
+
+Let’s try it out. We’ll upload a .htaccess file specifying a new .corb3nik extension to be executed as PHP, and appending php://filter/convert.base64-encode/resource=/etc/passwd at the end :
+
+Now we upload a generic trigger.corb3nik file (the content doesn’t matter) and request it.
+
+Since we can use php://, this means we can upload base64-encoded PHP code in a file, base64 decode it via the .htaccess file, and have it evaluated before being appended to the response.
+
+To simplify the process, I created a python script :
+
+… and when we run it :
+
+We can run PHP code now!
+
+Obtaining command execution
+
+With the python script above, we can run arbitrary PHP code. We tried runnning typical shell functions such as system() and exec(), but soon realized that most of these functions are blocked. Calling phpinfo() gave us the whole list :
+
+In situations like this, a known technique to get command execution is through the mail() function.
+
+PHP’s mail() function calls execve("/bin/sh", ["sh", "-c", "/usr/sbin/sendmail -t -i "], ...). Because of this implementation, if we were to set the LD_PRELOAD environment variable with a custom library, we can modify the behavior of /bin/sh and gain command execution. You can read more about this here.
+
+Its worth nothing that this will work even if /usr/sbin/sendmail isn’t present. We can demonstrate this with a small PHP script :
+
+For the custom library, we’ll overwrite getuid() :
+
+The code above will run system() with the command specified in the _evilcmd environment variable. The output will be sent to /tmp/_0utput.txt.
+
+Here’s the new Python script for our new exploit (here we’re calling uname -a):
+
+We’re almost there! Seems like we have a captcha to solve in order to get the flag.
+Solving the captcha
+
+In order to obtain the flag, we need to solve the equation given by the /get_flag binary. The /get_flag binary waits for less than a second for user input, therefore we will need to automate the solver.
+
+Running it a few times, we noticed that the equation only does additions.
+
+I’ve decided to create the solver in C :
+
+The code above basically launches /get_flag, fetches the equation, splits it via the + seperator, sums each part, sends it back to the binary and prints the flag.
+
+The final PHP code looks like this :
+
+… which results in :
+
+Flag : INS{l33t_l33t_l33t_ich_hab_d1ch_li3b}

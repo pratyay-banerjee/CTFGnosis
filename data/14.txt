@@ -1,0 +1,236 @@
+
+Hacker Movie Club CSAW Quals 2018
+
+Name : Hacker Movie Club | Team:NULLKrypt3rs | Solves :71 | Type : Web | Note : Files here
+
+The Problem Statement :
+
+    Hacker movies are very popular, so we needed a site that we can scale. You better get started though, there are a lot of movies to watch.
+
+The Problem Statement
+
+The Problem Statement
+
+Following is the page you get on clicking on the link
+
+Homepage
+
+Homepage
+
+Initial Analysis
+
+The first thing I do on a web challenge is check it’s source and then check every functionality of the web app, while passing it through a proxy ( preferably Burp suite ), just to check some hidden headers etc . The proxy helps in analysing requests later , as it’s saved in it’s history.
+
+The page didn’t have any functionalities apart from a report button.
+
+It had a js file namely cdn.js with contents as.
+
+Well the source also shows the presence of two other files.
+
+Comparing mustache.min.js with the original file checked out and thus I was sure there wasn’t anything fishy inserted into it.
+
+There are two observations to look into here :
+
+    There’s a comment that says
+
+    // The admin is on her way to check the page
+
+    It’s when the report endpoint returns a success message. So, perhaps we’ve to do XSS and leak out some data from the admin. But sooner than the thought enters my mind I realize that there’s no input data endpoint ( although I did try modifying the json being sent in the /api/report endpoint but nothing ever came back :( )
+
+    As we can see, the code uses Promise to fetch a file main.mst from some cdn.If you look closely the lines in cdn.js:
+
+    fetch(`//${cdn}/cdn/${src}`,{
+
+    and then the url, the pattern kinda stands out clearly ( isn’t it )
+
+    //27e2d63e9905da1061dfeeacf95dcaf7aa65efcd.hm.vulnerable.services/cdn/main.mst
+
+    Any way that was just an observation.
+
+The Burp Investigations
+
+I usually when doing bug bounties ( or web questions ) setup the target scope to remove unnecessary clutter ( In bug bounties it helps a lot to focus ) , not necessary to solve this question though :
+
+Setting Target Scope
+
+Setting Target Scope
+
+And then ✓ the filtering options to Show only in-scope options :
+Burp Proxy Filter Options
+
+Burp Proxy Filter Options
+
+With all that setup, now coming back to problem at hand : There’s a request to the endpoint /api/movies , which returns the following json.
+
+I can’t help but notice that the last json entry is :
+
+{"admin_only":true,"length":"22 Hours, 17 Minutes","name":"[REDACTED]","year":2018}
+
+
+It is the only entry with "admin_only":true," and interestingly all other movies are being displayed on the webpage but not this.
+Hmm, peculiar. But why is it so ?
+
+
+Looking into the traffic in burpsuite, we notice the file main.mst being fetched, with the contents as.
+Well, anyone who has slight knowledge of making websites with “new technologies” would understand that it’s a template file . Well now the pieces fit in, mustache.min.js, so perhaps mustache’s template file. Hmmm, now the other peculiarity as to why it wasn’t displaying the [REDACTED] content on the page, well it’s quite trivial :
+
+  {{^admin_only}}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ year }}</td>
+      <td>{{ length }}</td>
+    </tr>
+  {{/admin_only}}
+
+So, only json, with admin_only as false would be displayed here, to test this theory ( as I didn’t know mustache and it’s templating syntax ) , just change the response of /api/movies in burp suite, changing Redacted’s admin_only to false.
+
+And sure enough the theory checks out :
+
+The REDACTED content
+
+The REDACTED content
+
+Okay, so now we can fairly assume that the flag is in the redacted content.
+
+The Struggle
+
+The million dollar question : How do we, get the webpage the admin sees ?
+I pondered many hours over this, going on and off on different questions and coming back to this but nothing came out. On the next day I was chatting with one of my friend ( he was also playing this CTF ) and he gave me a suggestion that maybe cache poisoning would work ( he was working that angle himself ).
+
+It instantly felt true, I remembered watching a talk on the same Web Cache Deception Attack , it was from BlackHat USA 2017, quite a great research.
+
+So, I started devising a strategy to cache poison the admin.
+Well the plan was to use a different url like :
+http://app.hm.vulnerable.services/?this_is_cache_poisoning
+
+Then I realized that we had no control over the url admin would go to ….
+Or maybe we had, I changed the Referer header, thinking that maybe the admin was looking going to this url when the /api/report endpoint was called.
+
+So, I did all of that and then visited the same page ( in hopes that it would be saved in the cache ), however it was a rabbit hole and nothing could come of it.
+
+While looking at the headers, I had missed this Cache-Control: no-cache, which was effectively thwarting this.
+
+Back to square one … ( or maybe not )
+The headers had these :
+
+~~~ SNIP ~~~
+X-Varnish: 150497792
+~~~ SNIP ~~~
+Age: 0
+~~~ SNIP ~~~
+
+So, well caching was in place on the server side. Looking up the X-Varnish header and Age header on google gives the following (here):
+
+    Age - The amount of time the served item was in the cache, in seconds. If the age is zero, the item was not served from the Varnish cache.
+    ~~ SNIP ~~
+    X-Varnish - The ID numbers of the current request and the item request that populated the Varnish cache. If this field has only one value, the cache was populated by the request, and this is counted as a cache miss
+
+So, well mine was a cache miss and so, Age is 0 and only one ID in X-Varnish header.
+
+Recently I had read about web caching attack, Practical Web Cache Poisoning. Reading the blog, you would find in the start itself under the section Caching 101 the following :
+
+    Some companies host their own cache using software like Varnish
+
+Okay, CSAW people were also using Varnish ( but that is quite a popular caching software ) so that couldn’t be a coincidence.
+
+In the Case Studies section under Basic Poisoning the author mentions how X-Forwarded-Host was a vulnerable parameter in case of Red Hat’s homepage ( Well two exact things matching ).
+
+That can’t again be a coincidence
+
+
+It also mentioned XSS being able to perform but after checking that I realized that the parameter wasn’t reflecting anywhere on the homepage ( so perhaps no XSS here ) .
+
+Thus I thought of changing the X-Forwarded-Host to my_server and see if it’s reflected in .
+
+Now, in the default configuration of burpsuite, you have in the proxy options under the section Intercept Client Requests the following :
+
+Burp Client Interception Request
+
+Burp Client Interception Request
+
+Which says not to intercept any js file and thus initially I couldn’t intercept js request ( I soon realized that and changed the rules accordingly )
+
+Now changing the X-Forwarded-Host
+
+Intercepting app.js request
+
+Intercepting app.js request
+
+Well, that didn’t change anything ( atleast then I thought so ). I discussed the same with my friend, he tried and he also got similar results ( the host hadn’t changed ).
+Some conclusions
+
+As you can see
+
+X-Varnish: 157368772 157916061
+~~~ SNIP ~~~
+Age: 59
+
+So, it can be seen that it’s being fetched from the cache and maybe if we hit it at the right time, we just might get it.
+
+Okay, much theorizing, now let’s get our hands dirty. I initially started
+
+I wrote a small python script regarding the same to poison the cache :
+
+Well here’s the output :
+
+The server script output
+
+The server script output
+
+We see, here the caching time is 2 minutes ( as the Age goes to a maximum of 120 ). As we can see, we can overwrite the js file here and serve our cached js file.
+
+
+The Showdown
+
+Well, that’s the key to the question. We will be caching the app.js with our server’s IP and force the admin to retrieve the webpage, by reporting it.
+Then the admin will be served our app.js, thus effectively fetching the main.mst file from our server.
+The strategy
+
+    Host a malicious main.mst on your server in the /cdn/ directory ( I hosted it on my aws instance with apache running, although ngrok would also be fine )
+    Cache poison the server, to insert your server’s IP there
+    Now, report to the admin, so that admin visit’s the page
+    The malicious main.mst will phone back to the server with all the movie list ( easy peasy )
+
+Now, as I said I’m no expert in mustache templating but it was quite easy to figure out how to get all the movie list onto our web server. It was my friend who made this template though , here’s what it looks like .
+
+However, instead of document.cookie we use the mustache template here to fetch the list of movies and send it to our server.
+
+And lo behold here’s what we get when we open the browser just after the cache poisoning is done
+
+The Poisoned Page
+
+The Poisoned Page
+
+So, I went on with reporting it and looking into my server logs :
+
+Server Logs
+
+Server Logs
+
+A little bit of explanation :
+
+    Here I am fetching the webpage
+
+    The img request to steal all the movie names ( from my browser, so no flag )
+
+    The admin visiting the page ( contains the flag ).
+    
+# Now we're sure that our entry has been put up in cache
+# So, just open the webbrowser, and report so that the admin
+# gets our cached page
+webbrowser.open('http://app.hm.vulnerable.services/')
+view raw
+poison.py hosted with ❤ by GitHub
+
+Kudos to the CSAW team for making such a good question 🎉🎉🎉
+UPDATE :
+
+I forgot to mention there was a slight issue with CORS, so I had to enable that on my apache.
+You can do the same by following the guide here
+
+However instead of allowing it from only s.codepen.io allow it from all like this :
+
+Header set Access-Control-Allow-Origin "*"
+My server conf
+
+My server conf

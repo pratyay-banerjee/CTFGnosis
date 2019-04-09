@@ -1,0 +1,45 @@
+Insomni'Hack Teaser 2019 - exploit-space
+CTF URL: https://teaser.insomnihack.ch/
+
+Solves: 7 / Points: 500 / Category: Web
+Challenge description
+
+    We have created a little exploit space and made it accessible for everyone! Have fun! You can get your own exploit space here.
+
+Challenge resolution
+
+This challenge was the most realistic yet fun web challenge of this Insomni’Hack teaser, as it presented nothing less than an installation of the ResourceSpace open source digital asset management software.
+
+The first step, like for any challenge, was the reconnaissance phase.
+
+As indicated in the commented HTML code, the installed version of the ResourceSpace was the version 8.6.12117:
+
+This software being open source, we can audit its source code in order to find vulnerabilities we can exploit.
+
+We can then look at the Git commits logs to find juicy commit messages like this one:
+
+Looking at the diff view for this commit, reveals the vulnerable entry point in the “/plugins/pdf_split/pages/pdf_split.php” page being passed to the run_command() function:
+
+The fix introduced by this commit just sanitizes the user inputs by applying the escapeshellarg() function:
+
+Using the semi-colon character thus completes the comnand line, allowing us to execute arbitrary commands on the web server. However, as we don’t have a direct visible output, we need to use an HTTP server such as the Burp collaborator listening for incomming requests.
+
+The following POST request uses the curl binary in order to send the result of the whoami command to our web server:
+
+Immediately after, we see the result of our command in our Burp collaborator interactions panel:
+
+The final step is to locate and get the flag:
+
+Wait… What? There’s a captcha that prevents non-interactive access:
+
+We actually need to obtain an interactive reverse shell on this server.
+
+To do so we can download the netcat binary from our web server using curl, add execution permission and run it:
+
+As expected, the web server just connects back to our server, therefore providing us with an interactive reverse shell:
+
+And finally we can solve the captcha and get the flag:
+
+Author: Ghostx0 @Ghostx_0
+
+Post date: 2019-02-02

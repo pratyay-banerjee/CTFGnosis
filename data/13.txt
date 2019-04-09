@@ -1,0 +1,75 @@
+
+SSO
+
+CSAW'18 CTF Qualification - Web (100 pts).
+
+        Description
+        TL;DR
+        Methology
+
+CSAW’18 CTF Qualification: SSO
+Event 	Challenge 	Category 	Points 	Solves
+CSAW’18 CTF Qualification 	SSO 	Web 	100 	200
+Description
+
+    Don’t you love undocumented APIs
+
+    Be the admin you were always meant to be
+
+    http://web.chal.csaw.io:9000
+
+TL;DR.
+
+This challenge consists in the analysis of an authentication flow based on the OAuth2.0 protocol (see RFC-6749 and RFC-6750).
+
+The task was not that complex, it was only a matter of careful analysis of RFCs in order to solve the challenge.
+Methology
+
+By reading the description of this challenge, we are informed that the goal of the challenge will be to impersonate an administrator.
+
+Let’s browse the first web page:
+
+
+At first glance, the goal of the challenge is to use the OAuth2.0 API in order to gain access to the /protected web page.
+
+By reading some RFCs related to the OAuth2 protocol, we quickly understand the role of the two endpoints:
+
+    /oauth2/authorize: allows the client to make an Authorization Request by passing the following parameters:
+        response_type (required): the value must be set to code;
+        redirect_uri (required): the absolute URI that will be passed to the redirection endpoint.
+    /oauth2/token: allows the client to make an Access Token Request by passing the following parameters:
+        grant_type (required): the value must be set to authorization_code;
+        code (required): the authorization code received from the authorization server;
+        redirect_uri (required): the absolute URI that will be passed to the redirection endpoint.
+
+As mentioned in the comments of the first web page, the OAuth authorization process has not been automated, we will have to manage the flow manually…
+
+Using Burp Suite, let’s check manually the authentication flow process!
+
+First, we need to make the Authorization Request:
+.
+
+Ok, let’s grab the authorization code and send the Access Token Request:
+
+We just obtained a JWT access token, let’s analyze it quickly using jwt.io:
+
+Now that we’ve successfully obtained an access token that is required to make a protected resource request, we’ve to gain admin access.
+
+After few tries, we finally understood that the secret entry was a hint to generate a new valid JWT token using the following operation:
+
+HMACSHA256(base64UrlEncode(header) + "." + base64UrlEncode(payload), secret)
+
+Let’s implement this algorithm with Python:
+
+Generate a new JWT:
+
+
+Now let’s send the final protected resource request:
+
+flag{JsonWebTokensaretheeasieststorage-lessdataoptiononthemarket!theyrelyonsupersecureblockchainlevelencryptionfortheirmethods}
+
+Final flag:
+
+    flag{JsonWebTokensaretheeasieststorage-lessdataoptiononthemarket!theyrelyonsupersecureblockchainlevelencryptionfortheirmethods}
+
+

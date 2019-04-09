@@ -1,0 +1,109 @@
+4,1,Express yourself - 35C3 CTF,,
+4,2,This year I attended 35C3 conference so I didn't have time to actually participate in the CTF with my team 5BC,,
+4,3,"After the CTF was over, my colleague challenged me to solve the express-yourself challenge which apparently no one solved during the event",,
+4,4,I like source code auditing so I accepted the challenge.,,
+4,5,(Beware - A lot of php code coming up...),,
+4,6,I heard nowadays the cool kids like Donald J,,
+4,7,Trump use ExpressionEngine to express themselves on the Internet,,
+4,8,"After all, the ""Best CMS"" is just about good enough for the bestest presidents.",,
+4,9,"This morning I set up a default install and gave it a try, do you like it?",,
+4,10,PSA: dont dirbuster it..,,
+4,11,you won't find anything,,
+4,12,Info: Here are a few deployment details: https://35c3ctf.ccc.ac/uploads/express_yourself_deployment_details.txt in case you got confused why the system directory might be missing.,I,
+4,13,Hint: flag is in db,I,
+4,14,"Hint2: challenge was probably a bit miscategorized in the ""web"" category, it belongs into the zajebiste category",I,
+4,15,"There are no hidden files or anything, see the deployment script",A/i,14
+4,16,you can set up the same environment locally and pwn it,A,15
+4,17,"no need to bruteforce anything, good luck",A,16
+4,18,"So basically the task was to install ExpressEngine using the deployment script (Which ""hardens"" the setup), audit the source code, find vulnerabilities in the default setup to get the flag.",I,
+4,19,"Before digging into the source code, I like to blackbox test the system",A,
+4,20,I usually open Burpsuite and navigate through the pages/features of the system,A,19
+4,21,"That way, I get the feeling of how large the initial attack surface is",A,20
+4,22,In that stage/audit stage I take small notes of vulnerabilty classes/vectors that are likely to be found in the system,A,19
+4,23,That way I can focus the research on this list.,A,22
+4,24,Here are some of the notes I took during the research:,A,"22,23"
+4,25,"When sending feedback at the contact page, it sends ""allow_attachments"" parameter, maybe there is a way to upload attachments?",A/I,25
+4,26,"They are using controllers, Maybe LFI in controller inclusion? Also, search for autoload, and functions that can cause autoload, like class_exists and new $xxx",A/I,
+4,27,"Also, there is a method called load_class which can load classes.",I,26
+4,28,"SQL Injection? I will need to select the flag from the db, so either SQLi, file read to read the config and code execution?",A/I,28
+4,29,__call functions can be interesting,I,
+4,30,_get_meta_vars leads to object injection if I could somehow leak the key...,A,28
+4,31,Understanding the system,A,
+4,32,Starting with understanding how the controllers work might give us insights into how the system is constructed,A/I,"26,31"
+4,33,How can we use controllers? How can we invoke methods? and so on..,A,26
+4,34,"Eventually, after some research, it appears that there are some potentially interesting controller methods, but how do we invoke them? Simple! REST API!",A/I,"33,34"
+4,35,Params can also be passed through $_GET/$_POST.,I,
+4,36,"But apparently, the root index.php contain the following lines:",I,
+4,37,"By default, the controller parsing is ignored and only the index method from the legacy controller ee can be called! What it contains? Let's dive in.",A/I,37
+4,38,Here is a short version of the index function,,
+4,39,"We can see that if REQ is equal to ""ACTION"", which means that the ACT parameter was supplied by $_GET/$_POST, then it calls generate_action function",I,
+4,40,"Otherwise, it calls generate_page",I,
+4,41,The more interesting method is generate_action:,I,
+4,42,We can see that this function instantiate the EE_Actions class,I,
+4,43,Let's see the constructor:,A,
+4,44,"If the ACT parameter was supplied, the function selects the class and method from the actions table by the supplied id",I,43
+4,45,Later we can see the instantiation of the selected class and execution of the method,I,
+4,46,So what is our attack surface?,A,
+4,47,We can focus the research on this list and start looking at each function.,A,
+4,48,An interesting entry in the list is the filemanager_endpoint,I,47
+4,49,"What does it do? Why we can access this method unauthenticated? This function actually calls process_request from the Filemanager class, so let's look at this function:",A/I,"48,49"
+4,50,"This function does a lot! By supplying an action we can get into many flows, but let's focus now on the directory_contents flow",A/I,48
+4,51,At the start of the directory_contents function it calls to the datatables function:,I,48
+4,52,We can see that this function takes a lot of parameters from the user,I,48
+4,53,One interesting parameter is tbl_sort,I,48
+4,54,"It looks like if it wasn't supplied, $state gets set to a default sorting",I,53
+4,55,"Otherwise, it sets as a user controlled sorting",I,54
+4,56,"Later, the above parameters get passed to the ee()->table->datasource function:",I,53
+4,57,The $options parameter overrides some of the settings,I,
+4,58,Below we can see a check for the tbl_sort parameter again,I,53
+4,59,"If it was supplied, it overrides the sort settings in the settings variable",I,58
+4,60,This raises a big red flag:,I,59
+4,61,A user controlled data can be set as the key of a sort,A,59
+4,62,"This can be a bad practice, because sort usually means SQL order by, and if we understand correctly we can probably influence the column name by which the order by occurs",A/I,"61,62"
+4,63,Column names are sometimes not sanitized properly because they don't come from user input,I,63
+4,64,"So, next, the $controller->$func is being executed",A,
+4,65,$func is the _file_datasource function:,I,64
+4,66,So our assumptions were correct,I,
+4,67,Indeed the sort parameter is used as order by,I,"61,62,66"
+4,68,The _browser_get_files calls to the ee()->file_model->get_files function with the $file_params so let's see what it does:,A/I,68
+4,69,"Looks like the get_files function ""constructs"" an SQL query",I,68
+4,70,"We were interested in the ""order by"" flow",A,67
+4,71,"It loops through the $parameters['order'] and if the $key is not equals ""upload_location_name"" it just calls $this->db->order_by function with the $key variable appended to the key, and the value",I,
+4,72,"I will spare you the long function, but as we assumed it doesn't sanitize the key properly and we have an SQL injection vulnerability!",A,
+4,73,Here is a picture of the malicious request being sent to a local server (runs in debug mode):,I,
+4,74,You can clearly see the 'out of context' string,I,
+4,75,From here it's a trivial exploitation:,A,
+4,76,"Get the list of databases and see that there is a database called ""flag"".",A,
+4,77,"Get the tables from the flag database and see that there is a table called ""flag"".",A,76
+4,78,"""select flag from flag"" and get the desired flag: 35c3_pl3ase_d0nt_pwn_tRump_wItH_th1s :)",A,
+4,79,"If you remember in the switch/case in the process_request function, there was an upload flow",I,
+4,80,"The upload_file actually calls _upload_file (""upload_dir"" is a directory id which we can easily get by calling to the directory function from the switch/case).",A/I,80
+4,81,So what this function does?,,
+4,82,Cleans the name of the supplied file,I,80
+4,83,"Checks if the allowed_type equals ""image""? In our case it is",I,80
+4,84,Calls do_upload to upload the file..,I,80
+4,85,Let's explain what's going on:,,
+4,86,First it sets some properties with values from the uploaded image,I,80
+4,87,Checks for hidden files and disallowed file names like .htaccess,I,80
+4,88,Checks for allowed file types,I,80
+4,89,"Firstly because our file has to be an image, it checks that our file is an actual image, but this can be bypassed by just uploading a valid image and appending extra content at the end",A/I,"80,89"
+4,90,Next it checks the file extensions.,I,"80,89"
+4,91,"and this is where they use black list: 'php', 'php3', 'php4', 'php5', 'php7', 'phps', 'phtml'.",A,90
+4,92,"If you know the Apache web server and it's php configuration well, you probably can guess that they forgot to filter .pht, which also runs as PHP!",I,91
+4,93,So the last step we have to bypass is the do_embedded_php_check check,A,
+4,94,They check if the file contains the <?php string,I,93
+4,95,"If it does, then they bail out",I,"93,94"
+4,96,"Otherwise, everything is ok",I,"93,94"
+4,97,This can be easily bypassed by using a shortened version of a PHP code,A,"93,94"
+4,98,"After all of those checks, the file is uploaded to the directory we chose by the directory_id parameter..",A,"93,94"
+4,99,So all we need to do is:,,
+4,100,Create an image with an appended PHP code,A,
+4,101,Upload it using the API with a name ending with '.pht',A,
+4,102,"So I had luck, and the CTF server was actually running Apache",A,
+4,103,I tried the exploit on it and it didn't work,A,102
+4,104,The file just didn't execute as PHP..,I,
+4,105,Something was wrong,I,
+4,106,"The server was running the latest Ubuntu and I didn't, so I immediately installed a fresh copy and also installed the latest Apache server, PHP available",A/I,
+4,107,"After checking the configuration I noticed that the regex responsible for catching PHP files changed, and .pht is not a valid extension anymore",A/I,
+4,108,However .phar was added to the list :O,I,
+4,109,So I quickly changed my exploit and you can see yourself.,A,

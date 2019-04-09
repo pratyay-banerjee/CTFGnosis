@@ -1,0 +1,55 @@
+
+[Hack.lu CTF 2018] Baby PHP Write-up (Web153)
+
+    PHP is a popular general-purpose scripting language that is especially suited to web development.
+
+    Fast, flexible and pragmatic, PHP powers everything from your blog to the most popular websites in the world.
+
+    Can you untangle this mess?!
+
+When we visit the website, we get the source code the index file.
+
+In order to bypass the first check we can either use php://input and send the data via POST or
+1
+	
+data://text/plain,Hello Challenge!
+
+In order to bypass the second check, we just need to send 1337 as key1. Since it will be read as a string, the comparasion $k1 === $cc will fail while intval($k1) returns 1337 and passes the check.
+
+The length of key2 must be 42 and it must start with digits but must end with ＄ which is a utf-8 encoded dollar sign, thus it does not match the empty string at the end of the line. Also, that utf-8 encoded dollar sign is consist of 3 bytes. Therefore, strlen will return its length as 3 instead of 1.
+
+Here is the value we will use for key2:
+1
+	
+000000000000000000000000000000000001337＄
+
+Now, we can set $cc using GET query as well.
+
+We can set $cc as an array such that both substr($cc, $bb) and sha1($cc) function calls return null. This will let us to overwrite local variables using GET query.
+
+Now, if you investigate the next line carefully, you will notice that after the $ symbol it jumps to the end of the line and goes to the left instead of write. So, the text is written such that is from right to left after excluding the first $ symbol. The line simply equals to the following:
+1
+	
+Now, in order to pass the next check, the condition $$a === $k1 must be satisfied which is simply equal to “2” === $k1 if we use the values of $a and $b from the previous line.
+
+We know that we are now allowed to set local variables using GET query and we will use it to set $k1 to 2.
+
+Finally, there is an assert call which takes a string as argument. We know that assert evaluates the string which is given as argument. Thus, we can inject some code to make it print us the $flag.
+
+We can set $bb to:
+1
+	
+print($flag);//
+
+This makes the assert line as the following:
+1
+	
+assert('print($flag);// === Array');
+
+Let’s send our payload to the web server and read our flag.
+1
+2
+3
+	
+
+Here is flag{7c217708c5293a3264bb136ef1fadd6e}.

@@ -1,0 +1,46 @@
+
+Oh My Raddit
+by xtreme
+
+Tags: crypto web 
+
+Rating: 2.3
+
+The text on the page says this:
+
+    Flag is hitcon{ENCRYPTION_KEY}, and here is a hint for you :P
+
+    P.S. If you fail in submitting the flag and want to argue with author, read the source first!
+
+That note in itself is a huge hint, but it also links to a file named hint.py with these contents:
+
+assert ENCRYPTION_KEY.islower()
+
+If you look around the page, you'll notice the links are all in a kinda weird format. For example:
+
+<a href="?s=59154ed9ef5129d081160c5f9882f57dcfd76f05f6ac8f1a38114a30fb1839a27fea88c412d9e1149dedcb1c01c0a6662a36d91fd8751e52ba939a65efbe150f9504247abb9fe6be24d3d4dcfda82306">An Innovative Phishing Style</a>
+
+The bytes of the s query parameter don't have any obvious pattern, and based on the text at the top of the page, we're most likely looking at ciphertext.
+
+If you look for patterns in the ciphertext, you'll find that all of the URLs have lengths divisible by 8-bytes, that the lengths correlate to the lengths of the link texts, and that many links tend to have 8-byte blocks in common:
+
+<a href="?s=5f5bc8717e2a287bca57f4b8b56dbbcb93ba507d73c987d63ded947902decf2b4d9b25eb4c9b10d1d86efe9ad771aa53f068f8c831c327cf26782d51e9396e5d7f91ae7dc27a59f49c5910c938f642b5d9d51086fba2caafaee2b8b4568118b53ca92540eb2d0a42">Collecting Shells by the Sea of NAS Vulnerabilities</a>
+
+<a href="?s=4fed7724ffefc52d803162b51565562bf9fccbe595222f66ec185f3d63911037b04d23f755be724cf7076268d41d8054ab07648d1373cdb2586c6d1db77c33c842aa7c80bae5f78fd9d51086fba2caafc1ec71ffc2863054">Siaberrys Command Injection Vulnerability</a>
+
+Based on all of these hints, we can infer that a 64-bit block cipher is used to encode data into each link, and we can deduce some plaintext for some of the blocks:
+
+d86efe9ad771aa53 f068f8c831c327cf 26782d51e9396e5d 7f91ae7dc27a59f4 9c5910c938f642b5 d9d51086fba2caaf aee2b8b4568118b5
+          C o l  l e c t i n g .  S h e l l s . b  y . t h e . S e  a . o f . N A S  . V u l n e r a  b i l i t i e s
+f7076268d41d8054 ab07648d1373cdb2 586c6d1db77c33c8 42aa7c80bae5f78f d9d51086fba2caaf c1ec71ffc2863054
+          S i a  b e r r y s . C  o m m a n d . I  n j e c t i o n  . V u l n e r a  b i l i t y
+
+If we guess that the algorithm used is DES, we can try brute-forcing the encryption key for the the 42aa7c80bae5f78f block, whose plaintext is "njection". The hints we've been given imply that the key is a lowercase string, so even if we're wrong about the algorithm being DES, the possible keyspace is very small and exhaused quickly, so we may as well try:
+
+hashcat -m 14000 42aa7c80bae5f78f:6e6a656374696f6e -a 3 '?l?l?l?l?l?l?l?l' --force
+
+And we get a result pretty quickly: "ldgonaro"
+
+Note: You could brute-force any block, but it's a good idea to avoid blocks with symbols as we don't know how they might be encoded at this point.
+
+You can now use this key to decrypt URLs and see the full contents. But if you try to submit hitcon{ldgonaro}, you won't get any points despite submitting a working encryption key. The least-significant bit in each byte of a DES key is ignored during encryption/decryption. So there are actually 256 equivalent keys. If you exclude the keys that aren't made up of letters only, there are 128 possible solutions. That's a small enough set that you can just submit them all until you get it right, and for this challenge, the accepted flag was hitcon{megnnaro}. (You may be able to find the flag without guessing by crafting download links, but that's not necessary for part one of this challenge.)

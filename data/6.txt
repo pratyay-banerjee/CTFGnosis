@@ -1,0 +1,51 @@
+Secure API
+
+bookgin
+
+We are given a nodejs API which we can read/write the notes. Follow the instruction on the landing page and visit /help, and we can see a hidden file fetcher API:
+
+Okay, let's try to guess the filename of the server. Visiting /fetchJSAPI/fetch/server.js, it turns out the server is named server.js. Note that the param must end in .js. Otherwise the server will not return the file content.
+
+
+
+The main script includes other routers in ./api/routes/routes. However, most of the note API is not interesting because the read-only in config.json is set to true. We cannot create/delete a new note. Here is the note router source code:
+
+
+
+In other APIs, the most suspicious one is status:
+
+
+
+It will execute those innocuous shell commands when visiting this API, but how to manipulate the hard-coded commands? The first thought comes to my mind is javascript prototype polution. If we can modify the prototype we can inject arbitrary command!
+
+The only thing we can control is through the note API. It use lodash to merge the note with empty one. Then I search the lodash vulnerability and find this interesting. It's just what we needed - Prototype Pollution.
+
+So the rest is trivial. Pollute the command object and get RCE of the server
+
+
+Although I can use percent-encoding %2f to send /, I can't bypass the file extension check.
+
+Actually I don't have other failled attempts. If you cannot come out of Prototype pollution, don't be disappointed. At least you learn something new :)
+SSL-VPN
+
+bookgin
+
+Unsolved, for the compelte writeup please refer to @YShahinzadeh's writeup
+
+Basically this is a SSRF challenge, using @ to make the google.com part being interperted as HTTP Basic access authentication.
+
+http://google.com@127.0.0.1:12345/abc
+
+//send the request to 127.0.0.1:12345
+
+I get the db.json through visiting http://162.243.23.15:8000/db.json/. Just append a slash.
+
+It's silly I didn't solve this one, because I forget to try the empty string in the path parameter...... so I assume it must be /.
+Failed Attempts
+
+    CSRF injection in http module
+        But the http module works well with ../, so I think it's not the vulnerable version.
+    Gussing the other API in http://162.243.23.15:8001
+        Nothing interesting. The echo API even doesn't return anything if we access it directly.
+    Add the header X-SSLVPN-Request-Id: 9B60:6E97:25ADB08:45E4D17:5AE34BA4 in the requests
+        It's totally useless.

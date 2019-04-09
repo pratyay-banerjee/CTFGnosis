@@ -1,0 +1,31 @@
+5,1,This was one of the web challenges,,
+5,2,Congrats to 0daysober and LC/BC for solving it!,,
+5,3,Run,,
+5,4,To run it locally just do docker-compose build && docker-compose up.,,
+5,5,There are several steps to successfully exploit it.,,
+5,6,You can leak the source code by navigating to /uploads../.,I,
+5,7,"After auditing the source code, you will find that the application unserializes strings from the database that have the prefix $serializedobject$",A/I,
+5,8,"However, there is a check to prevent you from injecting strings of that form into the database",I,
+5,9,"Luckily, MSSQL automatically converts full-width unicode characters to their ASCII representation",I,
+5,10,"For example, if a string contains 0xEF 0xBC 0x84, it will be stored as $.",I,
+5,11,SoapClient can perform POST requests if any method is called on the object,A,
+5,12,"The Attachment class implements a __toString method, which calls open on its za property",I,
+5,13,Serializing a SoapClient as za property will therefore lead to SSRF.,A,12
+5,14,"There is a proxy running on 127.0.0.1:8080, which you want to reach",A/I,
+5,15,"Looking at the nginx configuration, it only accepts GET requests",I,
+5,16,"However, SoapClient generates POST requests",I,
+5,17,But the _user_agent property of SoapClient is vulnerable to CRLF injection and thus you can perform a request splitting,A/I,
+5,18,"By injection \n\n followed by a valid GET request, you can reach the proxy via a GET.",A,17
+5,19,Here I fucked up a bit,,
+5,20,Intended solution was to bypass the check for http/https in miniProxy,A,
+5,21,This is possible by using gopher:///..,A,20
+5,22,as miniProxy only verifies http/https if the host is set,I,
+5,23,"Unfortunately, you can also just bypass it with a 301 redirect to gopher..",A,20
+5,24,Connect to MSSQL via gopher,A,"21,23"
+5,25,Final step was to connect to MSSQL via gopher using the credentials from the source code leak,A,24
+5,26,"The only thing to look out for here is that gopher automatically adds a \r\n to the request, which has to be accounted for when creating the MSSQL packets.",A/I,
+5,27,Get flag,A,
+5,28,The miniProxy does not return the output of the request if the resulting URL is different from the requested URL (which it is in our case),I,
+5,29,"Therefore to get the flag you want to copy it to one of your posts: INSERT INTO posts (userid, content, title, attachment) VALUES (123, (select flag from flag.flag), ""foo"", ""bar"");-- -",A,28
+5,30,You can find your user id by sending a request to the application with the header Debug: 1.,A,
+5,31,To run the exploit do python exploit.py,A,

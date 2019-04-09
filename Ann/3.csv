@@ -1,0 +1,70 @@
+3,1,You can host your l33t pictures here.,,
+3,2,"This challenge consisted of a file upload service, allowing a user to upload images in a folder created specifically for your session.",I,
+3,3,"By checking the source code, we can find the HTML comment <!-- /?source -->, suggesting that we can leak the source code with the GET parameter source.",A/I,3
+3,4,Here is the challenge code :,,
+3,5,Determining the goal of the challenge,,
+3,6,The script above allows users to upload files at the location images/[20_random_bytes_in_hex]/[filename].,I,
+3,7,"After a succesful upload, the location of the upload is displayed, allowing the user to visit his file.",I,6
+3,8,We can’t upload any kind of file though,I,6
+3,9,"In fact, there are a few constraints we have to respect :",I,6
+3,10,"The uploaded file cannot have a PHP extension (.php, .php3, .phar, …).",I,6
+3,11,The uploaded file cannot contain <?.,I,6
+3,12,The uploaded file has to be a valid image of size 1337x1337.,I,6
+3,13,"Assuming that we want to obtain RCE, we need to figure out a way to have PHP code execution without using a PHP extension.",A,10
+3,14,"Uploading a .htaccess file could help us with that, but with the image restrictions, we need to find a way to create a valid .htaccess/image polyglot.",A,"6,13"
+3,15,Finding a .htaccess/image polyglot candidate,A,15
+3,16,The concept behind an .htaccess/image polyglot is that we need an image file that can be interpreted as an .htaccess file without any errors.,I,"14,15"
+3,17,Every image file format starts with a few magic bytes used to identify itself,I,12
+3,18,"For example, PNGs will start with the 4 bytes \x89PNG",I,17
+3,19,"Since \x89PNG isn’t a valid .htacces directive, we won’t be able to use the PNG file format for our polyglot.",I,"13,14,18"
+3,20,"Therefore, my first attempt was to find a file format with a signature starting with a # sign",I,19
+3,21,"Since the # sign is interpreted as a comment in .htaccess files, the remainder of the image data would be ignored, resulting in a valid .htaccess/image polyglot.",A/I,"15,20"
+3,22,"Unfortunately, I couldn’t find an image file format starting with a #.",I,20
+3,23,"Later on, one of my teammates (@Tuan_Linh_98) noticed that lines starting with a null byte (\x00) are also ignored in an .htaccess file, just like comments (#).",I,
+3,24,"Looking through the supported image types for exif_imagetype(), we can download a sample of each type and check for a signature starting with a null byte.",A,23
+3,25,A good candidate we found was .wbmp files :,I,24
+3,26,Creating the .htaccess/image polyglot,A,14
+3,27,"In order to make things simpler, we want to find the smallest possible .wbmp file we can work with",A,"25,26"
+3,28,"To do so, I used the following PHP script :",A,27
+3,29,… resulting in the following output :,,
+3,30,Seems like a valid .wbmp file only requires 6 bytes! We can assume that the width and height are stored in bytes 3-6.,A/I,"27,30"
+3,31,"In a hex editor, you can play around with these bytes to figure out how to get a size of 1337x1337",I,12
+3,32,The final image.wbmp of size 1337x1337 looks like this :,I,"12,31"
+3,33,"From this file, we can append any data we want, and it’ll be considered as valid :",A,"14,31"
+3,34,Obtaining PHP code execution,A,13
+3,35,"Now that we can upload an .htaccess file, we need to figure out how to get code execution",A/I,"6,14"
+3,36,"Because of the filter on <?, we can’t simply upload a PHP script and have it executed.",I,11
+3,37,One of the directives we can use in an .htaccess file is php_value,A,11
+3,38,This directive allows us to overwrite the value of any of the settings here with the PHP_INI_PERDIR flag.,A,37
+3,39,"Among these settings, there is auto_append_file, which allows us to specify a file to be appended and included when requesting a PHP file",I,
+3,40,Turns out that auto_append_file also allows various wrappers such as php://.,I,39
+3,41,Let’s try it out,A,40
+3,42,"We’ll upload a .htaccess file specifying a new .corb3nik extension to be executed as PHP, and appending php://filter/convert.base64-encode/resource=/etc/passwd at the end :",A,"11,40"
+3,43,Now we upload a generic trigger.corb3nik file (the content doesn’t matter) and request it.,A,42
+3,44,"Since we can use php://, this means we can upload base64-encoded PHP code in a file, base64 decode it via the .htaccess file, and have it evaluated before being appended to the response.",I,11
+3,45,"To simplify the process, I created a python script :",A,44
+3,46,… and when we run it :,A,45
+3,47,We can run PHP code now!,A,
+3,48,Obtaining command execution,A,
+3,49,"With the python script above, we can run arbitrary PHP code",A,45
+3,50,"We tried runnning typical shell functions such as system() and exec(), but soon realized that most of these functions are blocked",A/I,50
+3,51,Calling phpinfo() gave us the whole list :,I,50
+3,52,"In situations like this, a known technique to get command execution is through the mail() function.",I,
+3,53,"PHP’s mail() function calls execve(""/bin/sh"", [""sh"", ""-c"", ""/usr/sbin/sendmail -t -i ""], ...)",I,52
+3,54,"Because of this implementation, if we were to set the LD_PRELOAD environment variable with a custom library, we can modify the behavior of /bin/sh and gain command execution",A,53
+3,55,You can read more about this here.,,
+3,56,Its worth nothing that this will work even if /usr/sbin/sendmail isn’t present,I,54
+3,57,We can demonstrate this with a small PHP script :,,
+3,58,"For the custom library, we’ll overwrite getuid() :",A,53
+3,59,The code above will run system() with the command specified in the _evilcmd environment variable,A,
+3,60,The output will be sent to /tmp/_0utput.txt.,A,
+3,61,Here’s the new Python script for our new exploit (here we’re calling uname -a):,A,"59,60"
+3,62,We’re almost there! Seems like we have a captcha to solve in order to get the flag.,I,
+3,63,Solving the captcha,A,62
+3,64,"In order to obtain the flag, we need to solve the equation given by the /get_flag binary",A,
+3,65,"The /get_flag binary waits for less than a second for user input, therefore we will need to automate the solver.",A/I,"63,64"
+3,66,"Running it a few times, we noticed that the equation only does additions.",I,65
+3,67,I’ve decided to create the solver in C :,A,"65,66"
+3,68,"The code above basically launches /get_flag, fetches the equation, splits it via the + seperator, sums each part, sends it back to the binary and prints the flag.",A,"65,67"
+3,69,The final PHP code looks like this :,,
+3,70,… which results in :,,

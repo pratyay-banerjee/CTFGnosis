@@ -1,0 +1,26 @@
+13,1,Event  Challenge  Category  Points  Solves,,
+13,2,Don’t you love undocumented APIs,,
+13,3,Be the admin you were always meant to be,,
+13,4,This challenge consists in the analysis of an authentication flow based on the OAuth2.0 protocol (see RFC-6749 and RFC-6750).,I,
+13,5,"The task was not that complex, it was only a matter of careful analysis of RFCs in order to solve the challenge.",I,
+13,6,"By reading the description of this challenge, we are informed that the goal of the challenge will be to impersonate an administrator.","A,I",
+13,7,Let’s browse the first web page:,A,
+13,8,"At first glance, the goal of the challenge is to use the OAuth2.0 API in order to gain access to the /protected web page.",I,7
+13,9,"By reading some RFCs related to the OAuth2 protocol, we quickly understand the role of the two endpoints:",A,
+13,10,/oauth2/authorize: allows the client to make an Authorization Request by passing the following parameters:,I,9
+13,11,response_type (required): the value must be set to code;,I,9
+13,12,redirect_uri (required): the absolute URI that will be passed to the redirection endpoint.,I,9
+13,13,/oauth2/token: allows the client to make an Access Token Request by passing the following parameters:,I,9
+13,14,grant_type (required): the value must be set to authorization_code;,I,9
+13,15,code (required): the authorization code received from the authorization server;,I,9
+13,16,redirect_uri (required): the absolute URI that will be passed to the redirection endpoint.,I,9
+13,17,"As mentioned in the comments of the first web page, the OAuth authorization process has not been automated, we will have to manage the flow manually…",I,
+13,18,"Using Burp Suite, let’s check manually the authentication flow process!",A,
+13,19,"First, we need to make the Authorization Request:",A,
+13,20,"Ok, let’s grab the authorization code and send the Access Token Request:",A,
+13,21,"We just obtained a JWT access token, let’s analyze it quickly using jwt.io:",A,
+13,22,"Now that we’ve successfully obtained an access token that is required to make a protected resource request, we’ve to gain admin access.",I,21
+13,23,"After few tries, we finally understood that the secret entry was a hint to generate a new valid JWT token using the following operation:",I,21
+13,24,Let’s implement this algorithm with Python:,,
+13,25,Generate a new JWT:,A,
+13,26,Now let’s send the final protected resource request:,A,25

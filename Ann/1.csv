@@ -1,0 +1,53 @@
+1,1,A recent Capture-The-Flag tournament hosted by Insomni’hack challenged participants to craft an attack payload for Drupal 7,,
+1,2,This blog post will demonstrate our solution for a PHP Object Injection with a complex POP gadget chain.,,
+1,3,The Droops challenge consisted of a website which had a modified version of Drupal 7.63 installed,I,
+1,4,"The creators of the challenge added a Cookie to the Drupal installation that contained a PHP serialized string, which would then be unserialized on the remote server, leading to a PHP Object Injection vulnerability",A/I,
+1,5,Finding the cookie was straightforward and the challenge was obvious: Finding and crafting a POP chain for Drupal.,,
+1,6,If you are not familiar with PHP Object Injections we recommend reading our blog post about the basics of PHP Object Injections.,,
+1,7,We found the following POP chain in the Drupal source code that affects its cache mechanism,I,
+1,8,Through the POP chain it was possible to inject into the Drupal cache and abuse the same feature that lead to the Drupalgeddon 2 vulnerability,A,7
+1,9,"No knowledge of this vulnerability is required to read this blog post, as each relevant step will be explained.",,
+1,10,"The POP chain is a second-order Remote Code Execution, which means that it consists of two steps:",I,
+1,11,Injecting into the database cache the rendering engine uses,A,10
+1,12,Exploiting the rendering engine and Drupalgeddon 2,A,10
+1,13,Injecting into the cache,A,11
+1,14,The DrupalCacheArray class in includes/bootstrap.inc implements a destructor and writes some data to the database cache with the method set(),I,
+1,15,This is our entry point of our gadget chain.,A,14
+1,16,"The set() method will essentially call Drupal’s cache_set() function with $this->cid, $data, and $this->bin, which are all under control of the attacker since they are properties of the injected object",A,13
+1,17,We assumed that we are now able to inject arbitrary data into the Drupal cache.,A,13
+1,18,"In order to find out if this assumption was true, we started digging into the internals of the Drupal cache",A,17
+1,19,We found out that the cache entries are stored in the database,I,
+1,20,Each cache type has its own table,I,
+1,21,"After a bit more of digging around, we discovered that the table name is the equivalent to $this->bin",A/I,21
+1,22,This means we can set bin to be of any cache type and inject into any cache table,A,"19,20,21"
+1,23,But what can we do with this?,,
+1,24,The next step was to analyze the different cache tables for interesting entries and their structure.,A,
+1,25,For example the cache_form table has a column called cid,I,
+1,26,"As a reminder, one of the arguments to cache_set() was $this->cid",I,
+1,27,"We assumed the following: $this->cid maps to the cid column of the cache table, which is set in $this->bin",A,"21,25,26"
+1,28,cid is the key of a cache entry and the data column simply is the $data parameter in cache_set().,I,
+1,29,To verify all these assumptions we created a serialized payload locally by creating a class in a build.php file and unserialized it on my test Drupal setup:,A,"27,28"
+1,30,"The reason we used the SchemaCache class here is because it extends the abstract class DrupalCacheArray, which means it can’t be instantiated on its own",A/I,30
+1,31,The deserialization of this data lead to the following entry in the cache_form table being created:,A,
+1,32,Using the injected cached data to gain Remote Code Execution,A,
+1,33,"Since we were now able to inject arbitrary data into any caching table, we started to search for ways in which the cache was used by Drupal that could be used to gain Remote Code Execution",A,
+1,34,"After a bit of searching, we stumbled upon the following ajax callback, which can be triggered by making a request to the URL: http://drupalurl.org/?q=system/ajax.",A,33
+1,35,The ajax_get_form() function internally uses cache_get() to retrieve a cached entry from the cache_form table:,I,
+1,36,This is interesting because this means it is possible to pass an arbitrary form render array to drupal_process_form(),A,35
+1,37,"As previously mentioned, the Drupalgeddon 2 vulnerability abused this feature, so chances were high that code execution could be achieved with the ability to inject arbitrary render arrays into the rendering engine.",A/I,37
+1,38,"Within drupal_process_form(), we found the following lines of code:",I,
+1,39,"Here, $element refers to the $form received via cache_get(), meaning the keys and values of the array can be set arbitrarily",A/I,
+1,40,This means it is possible to simply set an arbitrary process (#process) callback and execute it with the render array as a parameter,A,39
+1,41,"Since the first argument is an array, it is not possible to simply call a function such as system() directly",A,
+1,42,What is required is a function that takes an array as input that leads to RCE.,I,41
+1,43,The drupal_process_attached() function seemed very promising:,A,
+1,44,"Since all array keys and values can be set arbitrarily, is is possible to call an arbitrary function with arbitrary arguments via call_user_func_array(), which leads to RCE!",A,
+1,45,This means the final POP chain looks like this:,,
+1,46,All that is left to do is to trigger the PHP Object Injection vulnerability with the resulting serialized string and then to make a POST request to http://drupalurl.org/?q=system/ajax and set the POST parameter form_build_id to 1337 to trigger the RCE.,A,
+1,47,POP chains can often become more complex and require a deeper knowledge of the application,I,
+1,48,"However, the purpose of this blog post was to demonstrate that exploitation is still possible, even if no obvious, first order POP chain exists",I,
+1,49,"If we had not known that the rendering API of drupal uses a lot of callbacks and had vulnerabilities in the past, we probably would not have found this particular POP chain",,
+1,50,"Alternatively, deep PHP knowledge can also lead to working POP chains when no obvious POP chain can be found",I,
+1,51,"There exists another POP chain, an Object Instantion to Blind XXE to File Read to SQL Injection to RCE",I,
+1,52,A write up for this POP chain was written by Paul Axe and can be found here,,
+1,53,We also would like to thank the creators for creating this and the other amazing challenges for the Insomni’hack CTF 2019.,,
